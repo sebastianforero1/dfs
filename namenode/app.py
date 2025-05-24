@@ -1,17 +1,19 @@
-from flask import Flask, request, jsonify
-from manager import NameNodeManager
+from flask import Flask, jsonify
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-nn = NameNodeManager()
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///metadata.db'
+db = SQLAlchemy(app)
 
-@app.route('/upload', methods=['POST'])
-def upload_metadata():
-    data = request.json
-    return jsonify(nn.register_file(data['filename'], data['blocks']))
+class Block(db.Model):
+    id = db.Column(db.String, primary_key=True)
+    file_path = db.Column(db.String)
+    leader_node = db.Column(db.String)
+    follower_nodes = db.Column(db.String)
 
-@app.route('/metadata/<filename>', methods=['GET'])
-def get_metadata(filename):
-    return jsonify(nn.get_file_blocks(filename))
+@app.route('/blocks/<path:file_path>', methods=['GET'])
+def get_blocks(file_path):
+    blocks = Block.query.filter_by(file_path=file_path).all()
+    return jsonify([{"id": b.id, "leader": b.leader_node} for b in blocks])
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+# Otros endpoints: /mkdir, /rm, /ls, etc.

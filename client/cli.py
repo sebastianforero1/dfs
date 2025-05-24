@@ -1,6 +1,6 @@
 import requests, grpc, file_pb2_grpc, file_pb2
 
-NAMENODE = "http://namenode-ip:5000"
+NAMENODE = "http://34.201.131.230:5000"
 
 def put(filename):
     with open(filename, 'rb') as f:

@@ -1,23 +1,31 @@
 from concurrent import futures
-import grpc, file_pb2_grpc, file_pb2
+import grpc
+import os
+from datanode_pb2 import BlockResponse, StatusResponse
+from datanode_pb2_grpc import DataNodeServicer, add_DataNodeServicer_to_server
 
-class DataNode(file_pb2_grpc.BlockTransferServicer):
+class DataNodeService(DataNodeServicer):
     def __init__(self):
-        self.storage = {}
+        self.blocks_dir = "blocks"
+        os.makedirs(self.blocks_dir, exist_ok=True)
 
-    def SendBlock(self, request, context):
-        key = f"{request.filename}_{request.block_id}"
-        self.storage[key] = request.content
-        return file_pb2.Ack(success=True)
+    def WriteBlock(self, request, context):
+        block_path = os.path.join(self.blocks_dir, request.block_id)
+        with open(block_path, 'wb') as f:
+            f.write(request.data)
+        return StatusResponse(success=True)
 
-    def GetBlock(self, request, context):
-        key = f"{request.filename}_{request.block_id}"
-        return file_pb2.BlockData(filename=request.filename, block_id=request.block_id, content=self.storage[key])
+    def ReadBlock(self, request, context):
+        block_path = os.path.join(self.blocks_dir, request.block_id)
+        if not os.path.exists(block_path):
+            return BlockResponse(data=b'')
+        with open(block_path, 'rb') as f:
+            return BlockResponse(data=f.read())
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    file_pb2_grpc.add_BlockTransferServicer_to_server(DataNode(), server)
-    server.add_insecure_port('[::]:8000')
+    add_DataNodeServicer_to_server(DataNodeService(), server)
+    server.add_insecure_port('[::]:50051')
     server.start()
     server.wait_for_termination()
 
