@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package dfs;
+
+// Servicio expuesto por los DataNodes para operaciones de bloque
+service DataNodeService {
+  // El Cliente envía un bloque a un DataNode primario.
+  // El DataNode primario es responsable de replicarlo.
+  rpc WriteBlock(stream WriteBlockRequest) returns (WriteBlockResponse); // [cite: 18] Cliente a DataNode
+
+  // El Cliente lee un bloque de un DataNode.
+  rpc ReadBlock(ReadBlockRequest) returns (stream ReadBlockResponse); // [cite: 18] Cliente a DataNode
+
+  // El DataNode primario envía un bloque a un DataNode secundario para replicación.
+  rpc ReplicateBlock(ReplicateBlockRequest) returns (ReplicateBlockResponse); // [cite: 27] DataNode a DataNode
+
+  // El NameNode instruye al DataNode para eliminar un bloque
+  rpc DeleteBlock(DeleteBlockRequest) returns (DeleteBlockResponse);
+}
+
+message BlockInfo {
+  string block_id = 1;
+  string file_id = 2; // Usado para contexto y organizar bloques si es necesario
+  // Dirección del datanode secundario al que replicar.
+  // Esto lo proporciona el NameNode al DataNode primario (vía cliente o llamada directa).
+  string secondary_datanode_grpc_address = 3;
+}
+
+message WriteBlockRequest {
+  oneof data_oneof {
+    BlockInfo block_info = 1; // El primer mensaje debe ser BlockInfo
+    bytes chunk_data = 2;     // Los mensajes subsecuentes son chunks de datos
+  }
+}
+
+message WriteBlockResponse {
+  string block_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message ReadBlockRequest {
+  string block_id = 1;
+}
+
+message ReadBlockResponse {
+  bytes chunk_data = 1;
+}
+
+message ReplicateBlockRequest {
+  string block_id = 1;
+  bytes data = 2; // Datos completos del bloque
+  string file_id = 3;
+}
+
+message ReplicateBlockResponse {
+  string block_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message DeleteBlockRequest {
+    string block_id = 1;
+}
+
+message DeleteBlockResponse {
+    string block_id = 1;
+    bool success = 2;
+    string message = 3;
+}

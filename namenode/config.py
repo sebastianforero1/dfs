@@ -1,6 +1,0 @@
-DATANODES = [
-    "http://54.167.103.169:50051",
-    "http://18.212.241.93:50051"
-]
-BLOCK_SIZE = 1048576  # 1MB por bloque
-REPLICATION_FACTOR = 2

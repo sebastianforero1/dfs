@@ -1,32 +1,49 @@
-import requests, grpc, file_pb2_grpc, file_pb2
+# client/cli.py
+import click
+import os
+import json
+import sys
 
-NAMENODE = "http://34.201.131.230:5000"
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from client_sdk import DFSClient
+from common import config as common_config
 
-def put(filename):
-    with open(filename, 'rb') as f:
-        content = f.read()
-    blocks = [content[i:i+1024] for i in range(0, len(content), 1024)]
-    block_data = [{'id': i} for i in range(len(blocks))]
-    r = requests.post(f"{NAMENODE}/upload", json={'filename': filename, 'blocks': block_data})
-    metadata = r.json()['locations']
-    for i, b in enumerate(blocks):
-        leader = metadata[i]['leader']
-        ip, port = leader.split(':')
-        channel = grpc.insecure_channel(f"{ip}:{port}")
-        stub = file_pb2_grpc.BlockTransferStub(channel)
-        stub.SendBlock(file_pb2.BlockData(filename=filename, block_id=i, content=b))
+@click.group()
+@click.option('--namenode_url', default=lambda: os.environ.get('NAMENODE_URL', common_config.NAMENODE_URL), help='URL del NameNode.')
+@click.pass_context
+def cli(ctx, namenode_url):
+    """CLI para DFS Minimalista.""" # [cite: 28]
+    ctx.ensure_object(dict)
+    client = DFSClient(namenode_url)
+    ctx.obj['client'] = client
+    # Cargar/guardar `current_path` para persistencia básica de `cd`
+    ctx.obj['current_path_file'] = os.path.expanduser("~/.dfs_cli_path.txt")
+    try:
+        with open(ctx.obj['current_path_file'], 'r') as f: client.current_path = f.read().strip() or "/"
+    except FileNotFoundError: client.current_path = "/"
 
-def get(filename):
-    r = requests.get(f"{NAMENODE}/metadata/{filename}")
-    metadata = r.json()
-    content = b''
-    for block in metadata:
-        ip, port = block['leader'].split(':')
-        channel = grpc.insecure_channel(f"{ip}:{port}")
-        stub = file_pb2_grpc.BlockTransferStub(channel)
-        res = stub.GetBlock(file_pb2.BlockRequest(filename=filename, block_id=block['id']))
-        content += res.content
-    with open("downloaded_" + filename, 'wb') as f:
-        f.write(content)
+def _save_current_path(ctx):
+    with open(ctx.obj['current_path_file'], 'w') as f: f.write(ctx.obj['client'].current_path)
+def _format_output(result): return json.dumps(result, indent=2, ensure_ascii=False)
 
-# Puedes añadir comandos ls, cd, etc. de forma similar
+@cli.command() @click.argument('path', default=".") @click.pass_context # ls [cite: 28]
+def ls(ctx, path): click.echo(_format_output(ctx.obj['client'].ls(path)))
+@cli.command() @click.argument('dir_path') @click.pass_context # mkdir [cite: 28]
+def mkdir(ctx, dir_path): click.echo(_format_output(ctx.obj['client'].mkdir(dir_path)))
+@cli.command() @click.argument('lfp', type=click.Path(exists=True,dir_okay=False)) @click.argument('dfp') @click.pass_context # put [cite: 28]
+def put(ctx, lfp, dfp): click.echo(_format_output(ctx.obj['client'].put(lfp, dfp)))
+@cli.command() @click.argument('dfp') @click.argument('ltp', type=click.Path(dir_okay=False)) @click.pass_context # get [cite: 28]
+def get(ctx, dfp, ltp): click.echo(_format_output(ctx.obj['client'].get(dfp, ltp)))
+@cli.command() @click.argument('path') @click.pass_context # cd [cite: 28]
+def cd(ctx, path): 
+    result = ctx.obj['client'].cd(path)
+    click.echo(_format_output(result))
+    if 'error' not in result: _save_current_path(ctx)
+@cli.command() @click.pass_context # pwd (no está en la lista pero es útil con cd)
+def pwd(ctx): click.echo(ctx.obj['client'].current_path)
+@cli.command() @click.argument('dir_path') @click.pass_context # rmdir [cite: 28]
+def rmdir(ctx, dir_path): click.echo(_format_output(ctx.obj['client'].rmdir(dir_path)))
+@cli.command() @click.argument('item_path') @click.pass_context # rm [cite: 28]
+def rm(ctx, item_path): click.echo(_format_output(ctx.obj['client'].rm(item_path)))
+
+if __name__ == '__main__': cli(obj={})
