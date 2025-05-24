@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+service BlockTransfer {
+  rpc SendBlock (BlockData) returns (Ack);
+  rpc GetBlock (BlockRequest) returns (BlockData);
+}
+
+message BlockData {
+  string filename = 1;
+  int32 block_id = 2;
+  bytes content = 3;
+}
+
+message BlockRequest {
+  string filename = 1;
+  int32 block_id = 2;
+}
+
+message Ack {
+  bool success = 1;
+}
